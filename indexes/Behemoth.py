@@ -104,7 +104,7 @@ def AddDeltaTable(path,id,config):
         return config
     dev,name,offset = free
     ids = str(id)
-    #os.system("./TableConvert di %s %s %s" % (path,name+":"+str(offset),ids+".idx"))
+    os.system("./TableConvert di %s %s %s" % (path,name+":"+str(offset),ids+".idx"))
     print("./TableConvert di %s %s %s" % (path,name+":"+str(offset),ids+".idx"))
     name,max,tables = config[dev]
     tables[id] = offset
