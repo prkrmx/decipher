@@ -23,6 +23,15 @@
 
 #include "vankusconf.h"
 
+/*Added by Max for broadcast messages*/ 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#define h_addr h_addr_list[0] /* for backward compatibility */
+
+
+
 /* The idea is that work is loaded by burst_load() into burstq[] and then burstq[] is periodically submitted to the GPU via 
    frag_clblob(). The GPU returns some work solved to report() each time. The report() function sees what is solved and sets some flags in 
    burstq[] accordingly. Once some burst in burstq[] is finishet, it is kicked out. "Free slots" is how many free places are in burstq[]. */
@@ -67,6 +76,20 @@ int fragdbptr = 0;
 char solutions[20][SOLSIZE];
 int solptr = 0;
 
+
+/*Added by Max for broadcast messages*/ 
+int sock, length;
+struct sockaddr_in server;  // IP Addressing(IP, port, type) Stuff
+struct hostent *hp;     		// DNS stuff
+char buffer[SOLSIZE];
+int on = 1;
+
+int sock1, length1;
+struct sockaddr_in server1;  // IP Addressing(IP, port, type) Stuff
+struct hostent *hp1;     		// DNS stuff
+int on1 = 1;
+
+int initFlag = 0;
 
 /* Get free position in the burst queue */
 int getfirstfree() {
@@ -220,6 +243,34 @@ void report(char * cbuf, int size) {
 
   uint64_t * a = (uint64_t *)cbuf;
 
+  //Broadcast stuff
+  ////////////////////////////////////////////////////////////////////////
+	if(!initFlag)
+	{
+		sock = socket(AF_INET, SOCK_DGRAM, 0);
+		setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &on, sizeof(on));
+		server.sin_family = AF_INET;
+		hp = gethostbyname("10.255.255.255");
+
+		bcopy((char*)hp->h_addr, (char*)&server.sin_addr, hp->h_length);
+		server.sin_port = htons(13101);
+		length = sizeof(struct sockaddr_in);
+
+
+		sock1 = socket(AF_INET, SOCK_DGRAM, 0);
+		setsockopt(sock1, SOL_SOCKET, SO_BROADCAST, &on1, sizeof(on1));
+		server1.sin_family = AF_INET;
+		hp1 = gethostbyname("10.255.255.255");
+
+		bcopy((char*)hp1->h_addr, (char*)&server1.sin_addr, hp1->h_length);
+		server1.sin_port = htons(13102);
+		length1 = sizeof(struct sockaddr_in);
+
+
+		initFlag = 1;
+	}
+  ////////////////////////////////////////////////////////////////////////
+
   for(int i = 0; i<fragdbptr; i++) {
 
     fragdbe e = fragdb[i];
@@ -264,6 +315,11 @@ void report(char * cbuf, int size) {
       memset(solutions[solptr], 0, SOLSIZE);
 
       snprintf(solutions[solptr], SOLSIZE, "Found %016lX @ %li  #%li  (table:%li)", state, arr[e.pos].pos, arr[e.pos].job, arr[e.pos].table);
+			
+			// Send Broadcast message 
+			snprintf(buffer, SOLSIZE, "FND %li %016lX %li", arr[e.pos].job, state, arr[e.pos].pos);      
+      sendto(sock, buffer, strlen(buffer), 0, &server, length);
+      sendto(sock1, buffer, strlen(buffer), 0, &server1, length1);
 
       //printf("to solq: %s\n", solutions[solptr]);
 
@@ -284,6 +340,34 @@ void report(char * cbuf, int size) {
    Return the computed burst in cbuf and return the job number.
  */
 int pop_result(char * cbuf, int size) {
+
+  //Broadcast stuff
+  ////////////////////////////////////////////////////////////////////////
+	if(!initFlag)
+	{
+		sock = socket(AF_INET, SOCK_DGRAM, 0);
+		setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &on, sizeof(on));
+		server.sin_family = AF_INET;
+		hp = gethostbyname("10.255.255.255");
+
+		bcopy((char*)hp->h_addr, (char*)&server.sin_addr, hp->h_length);
+		server.sin_port = htons(13101);
+		length = sizeof(struct sockaddr_in);
+
+
+		sock1 = socket(AF_INET, SOCK_DGRAM, 0);
+		setsockopt(sock1, SOL_SOCKET, SO_BROADCAST, &on1, sizeof(on1));
+		server1.sin_family = AF_INET;
+		hp1 = gethostbyname("10.255.255.255");
+
+		bcopy((char*)hp1->h_addr, (char*)&server1.sin_addr, hp1->h_length);
+		server1.sin_port = htons(13102);
+		length1 = sizeof(struct sockaddr_in);
+
+
+		initFlag = 1;
+	}
+  ////////////////////////////////////////////////////////////////////////
 
   uint64_t * a = (uint64_t *)cbuf;
 
@@ -328,6 +412,11 @@ int pop_result(char * cbuf, int size) {
         /* finished && challenge lookup -> job is finished */
         if(chall > 0) {
           snprintf(solutions[solptr], SOLSIZE, "crack #%i took", jobnum);
+					// Send Broadcast message 
+					snprintf(buffer, SOLSIZE, "CRK %i", jobnum);
+				  	sendto(sock, buffer, strlen(buffer), 0, &server, length);
+				 	sendto(sock1, buffer, strlen(buffer), 0, &server1, length1);
+
           solptr++;
         }
 
